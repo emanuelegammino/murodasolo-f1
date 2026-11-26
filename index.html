@@ -2710,7 +2710,7 @@
                         <div class="bg-[#131823] border border-[#232B42] rounded-3xl overflow-hidden">
                             <div class="px-4 py-4 border-b border-[#232B42]">
                                 <h3 class="text-sm sm:text-base font-black uppercase tracking-wide text-white">
-                                    Record nel Periodo per Sessione
+                                    Record per Sessione
                                 </h3>
                             </div>
                             <div class="divide-y divide-[#232B42]/70">
@@ -2783,7 +2783,7 @@
                                         const leader = list[0];
                                         const ties = leader ? list.filter(e => e.count === leader.count) : [];
                                         const leaderLabel = !leader ? 'Nessun episodio'
-                                            : ties.length > 1 ? `${leader.name} (+${ties.length - 1} a pari merito)` : leader.name;
+                                            : ties.map(e => e.name).join(' · ');
                                         const eKey = `edition_${r.id}`;
                                         const isOpen = state.expandedSessionKey === eKey;
                                         return `
@@ -2795,7 +2795,7 @@
                                                             <i class="fa-solid ${r.icon}"></i><span>${r.label}</span>
                                                         </div>
                                                         <div class="flex items-center gap-2 mt-1">
-                                                            <span class="text-sm font-extrabold text-white truncate">${escapeHtml(leaderLabel)}</span>
+                                                            <span class="text-sm font-extrabold text-white leading-snug">${escapeHtml(leaderLabel)}</span>
                                                             ${leader ? `<i class="fa-solid fa-chevron-down text-xs text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}"></i>` : ''}
                                                         </div>
                                                     </div>
