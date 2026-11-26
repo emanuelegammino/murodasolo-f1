@@ -2606,8 +2606,8 @@
 
                 const condStats = stats.conditionRankings[state.statsTab];
                 const condRows = [
-                    { id: 'wet', label: '🌧️ MURI SUL BAGNATO (PISTA BAGNATA)', list: condStats.wet },
-                    { id: 'dry', label: "☀️ MURI SULL'ASCIUTTO (PISTA ASCIUTTA)", list: condStats.dry }
+                    { id: 'wet', label: '🌧️ MURI SUL BAGNATO', list: condStats.wet },
+                    { id: 'dry', label: "☀️ MURI SULL'ASCIUTTO", list: condStats.dry }
                 ];
 
                 html += `
@@ -2835,7 +2835,7 @@
                         <div class="bg-[#131823] border border-[#232B42] rounded-3xl overflow-hidden">
                             <div class="px-4 py-4 border-b border-[#232B42] flex items-center justify-between gap-2">
                                 <h3 class="text-sm sm:text-base font-black uppercase tracking-wide text-white">
-                                    Condizioni Pista (Asciutto vs Bagnato)
+                                    Condizioni Pista
                                 </h3>
                                 <div class="flex items-center gap-1.5 shrink-0 font-mono text-[11px] font-bold">
                                     <span class="px-2 py-0.5 rounded-lg bg-amber-500/15 border border-amber-500/35 text-amber-300">☀️ ${condStats.totalDry}</span>
