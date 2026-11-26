@@ -77,8 +77,18 @@
         // ==========================================
         // 1. CONFIGURAZIONE SUPABASE & COSTANTI
         // ==========================================
-        const DEFAULT_SUPABASE_URL = 'https://zjxjupxncxlyyuzmufia.supabase.co';
-        const DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpqeGp1cHhuY3hseXl1em11ZmlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5NzA4NTcsImV4cCI6MjA4OTU0Njg1N30.V8w16vS4E8O5_L4oQ4X9K4g8X9X0s1k1G8Y5h7c9L8I';
+        const DEFAULT_SUPABASE_URL = 'https://mhtmdghkvgykheacczvm.supabase.co';
+        // Vecchio progetto non più disponibile: chi lo ha ancora salvato nel browser passa a quello nuovo
+        const RETIRED_SUPABASE_URLS = ['https://zjxjupxncxlyyuzmufia.supabase.co'];
+
+        // Le chiavi "sb_publishable_" vanno solo nell'header apikey; le vecchie chiavi JWT anche in Authorization
+        function supabaseHeaders(apiKey, extra = {}) {
+            const key = String(apiKey || '').trim();
+            const h = { 'apikey': key, ...extra };
+            if (key && !key.startsWith('sb_publishable_')) h['Authorization'] = `Bearer ${key}`;
+            return h;
+        }
+        const DEFAULT_SUPABASE_KEY = 'sb_publishable_NmRf6XAOCvPg-kiXp8NvZQ_bCvQ00ez';
         const DEFAULT_ADMIN_PIN = '1994';
 
         const STORAGE_KEY = 'murodasolo_f1_db_native_v5';
@@ -1238,7 +1248,10 @@
                         if (parsed && parsed.url && parsed.key) {
                             // Migrazione: vecchie versioni salvavano il PIN in chiaro
                             const pinHash = parsed.pinHash || (parsed.pin ? hashPin(parsed.pin) : null);
-                            const migrated = { url: parsed.url, key: parsed.key, pinHash };
+                            const retired = RETIRED_SUPABASE_URLS.includes(String(parsed.url).replace(/\/+$/, ''));
+                            const migrated = retired
+                                ? { url: DEFAULT_SUPABASE_URL, key: DEFAULT_SUPABASE_KEY, pinHash }
+                                : { url: parsed.url, key: parsed.key, pinHash };
                             try { localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify(migrated)); } catch (_) {}
                             return migrated;
                         }
@@ -1619,11 +1632,7 @@
             try {
                 const res = await fetch(`${baseUrl}/rest/v1/app_state?select=*&id=in.(main,main_state,main_v1)`, {
                     method: 'GET',
-                    headers: {
-                        'apikey': apiKey,
-                        'Authorization': `Bearer ${apiKey}`,
-                        'Accept': 'application/json'
-                    }
+                    headers: supabaseHeaders(apiKey, { 'Accept': 'application/json' })
                 });
 
                 if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -1671,7 +1680,7 @@
         async function fetchRemoteRow(baseUrl, apiKey) {
             const rowId = state.cloudRowId || 'main';
             const res = await fetch(`${baseUrl}/rest/v1/app_state?select=*&id=eq.${encodeURIComponent(rowId)}`, {
-                headers: { 'apikey': apiKey, 'Authorization': `Bearer ${apiKey}`, 'Accept': 'application/json' }
+                headers: supabaseHeaders(apiKey, { 'Accept': 'application/json' })
             });
             if (!res.ok) throw new Error('HTTP ' + res.status);
             const rows = await res.json();
@@ -1719,12 +1728,10 @@
 
                 const res = await fetch(`${baseUrl}/rest/v1/app_state?on_conflict=id`, {
                     method: 'POST',
-                    headers: {
-                        'apikey': apiKey,
-                        'Authorization': `Bearer ${apiKey}`,
+                    headers: supabaseHeaders(apiKey, {
                         'Content-Type': 'application/json',
                         'Prefer': 'resolution=merge-duplicates,return=minimal'
-                    },
+                    }),
                     body: JSON.stringify(payloadBody)
                 });
 
