@@ -518,6 +518,12 @@
 
         const SESSIONS_LIST = ['FP1', 'FP2', 'FP3', 'SQ1', 'SQ2', 'SQ3', 'Sprint', 'Q1', 'Q2', 'Q3', 'Race'];
 
+        // Nome mostrato delle sessioni (il valore salvato resta invariato, es. 'Sprint')
+        const SESSION_LABELS = { Sprint: 'Sprint Race' };
+        function sessionLabel(code) {
+            return SESSION_LABELS[code] || code || '';
+        }
+
         // ==========================================
         // 4. DATABASE STORICO COMPLETO 2021 - 2026 (281 EPISODI TOTALI)
         // ==========================================
@@ -1361,7 +1367,7 @@
                     round: Number(l.round) || '',
                     gp: normalizeGpName(l.gp) || '',
                     circuit: l.circuit || '',
-                    session: l.session || '',
+                    session: sessionLabel(l.session),
                     cond: (l.trackCondition === 'wet' || l.condition === 'wet') ? 'Bagnato' : 'Asciutto',
                     driver: l.driverName || '',
                     team: l.teamName || TEAM_NAME_MAP[l.teamCode] || l.teamCode || '',
@@ -2883,7 +2889,7 @@
                         (l.driverName || '').toLowerCase().includes(qLog) ||
                         (l.gp || '').toLowerCase().includes(qLog) ||
                         (l.circuit || '').toLowerCase().includes(qLog) ||
-                        (l.session || '').toLowerCase().includes(qLog) ||
+                        sessionLabel(l.session).toLowerCase().includes(qLog) ||
                         (l.note || '').toLowerCase().includes(qLog) ||
                         (l.teamCode || '').toLowerCase().includes(qLog) ||
                         (l.year || '').includes(qLog) ||
@@ -2979,7 +2985,7 @@
 
                                     <select id="inline-log-session" class="px-2.5 py-2.5 rounded-xl bg-[#0B0E14] border border-[#232B42] text-xs font-semibold text-white">
                                         ${SESSIONS_LIST.map(sess => `
-                                            <option value="${sess}" ${state.logSession === sess ? 'selected' : ''}>${sess}</option>
+                                            <option value="${sess}" ${state.logSession === sess ? 'selected' : ''}>${sessionLabel(sess)}</option>
                                         `).join('')}
                                     </select>
                                 </div>
@@ -3168,7 +3174,7 @@
                                                                 <span class="text-gray-200 font-semibold leading-snug">${formatEpisodeLocation(ep)}</span>
                                                                 <span class="flex items-center gap-1.5 shrink-0">
                                                                     ${renderVideoButton(ep.url, true)}
-                                                                    <span class="px-2 py-0.5 rounded bg-[#0B0E14] border border-[#232B42] font-mono text-[11px] font-bold text-amber-300">${escapeHtml(ep.session)}</span>
+                                                                    <span class="px-2 py-0.5 rounded bg-[#0B0E14] border border-[#232B42] font-mono text-[11px] font-bold text-amber-300">${escapeHtml(sessionLabel(ep.session))}</span>
                                                                 </span>
                                                             </div>
                                                         `).join('')}
@@ -3272,7 +3278,7 @@
                                                                 <span class="text-gray-200 font-semibold leading-snug">
                                                                     <strong class="text-white">${escapeHtml(ep.driverName)}</strong> — ${formatEpisodeLocation(ep)}
                                                                 </span>
-                                                                <span class="px-2 py-0.5 rounded bg-[#0B0E14] border border-[#232B42] font-mono text-[11px] font-bold text-amber-300 shrink-0">${escapeHtml(ep.session)}</span>
+                                                                <span class="px-2 py-0.5 rounded bg-[#0B0E14] border border-[#232B42] font-mono text-[11px] font-bold text-amber-300 shrink-0">${escapeHtml(sessionLabel(ep.session))}</span>
                                                             </div>
                                                         `).join('')}
                                                     </div>
@@ -3398,7 +3404,7 @@
                                                 <div class="flex items-center gap-1.5 shrink-0">
                                                     ${renderVideoButton(lg.url)}
                                                     <span class="px-2.5 py-1 rounded-xl bg-[#0B0E14] border border-[#232B42] font-mono text-xs font-extrabold text-white">
-                                                        ${escapeHtml(lg.session)}
+                                                        ${escapeHtml(sessionLabel(lg.session))}
                                                     </span>
                                                     ${(state.isAdmin && !IS_PUBLIC_VIEW) ? `
                                                         <button type="button" data-action="edit-log" data-id="${escapeHtml(lg.id)}" data-year="${escapeHtml(targetLogYear)}"
@@ -3556,7 +3562,7 @@
                                     <div>
                                         <label class="text-[11px] font-mono text-gray-400">Sessione</label>
                                         <select id="ql-session" class="w-full mt-1 px-2.5 py-2 rounded-xl bg-[#0B0E14] border border-[#232B42] text-xs font-mono text-white">
-                                            ${SESSIONS_LIST.map(sess => `<option value="${sess}" ${state.logSession === sess ? 'selected' : ''}>${sess}</option>`).join('')}
+                                            ${SESSIONS_LIST.map(sess => `<option value="${sess}" ${state.logSession === sess ? 'selected' : ''}>${sessionLabel(sess)}</option>`).join('')}
                                         </select>
                                     </div>
                                 </div>
@@ -3703,7 +3709,7 @@
                                     <div class="col-span-2">
                                         <label class="text-[11px] font-mono text-gray-400">Sessione</label>
                                         <select id="edit-log-session" class="w-full mt-1 px-2.5 py-2 rounded-xl bg-[#0B0E14] border border-[#232B42] text-xs font-mono text-white">
-                                            ${SESSIONS_LIST.map(sess => `<option value="${sess}" ${ef.session === sess ? 'selected' : ''}>${sess}</option>`).join('')}
+                                            ${SESSIONS_LIST.map(sess => `<option value="${sess}" ${ef.session === sess ? 'selected' : ''}>${sessionLabel(sess)}</option>`).join('')}
                                         </select>
                                     </div>
                                 </div>
