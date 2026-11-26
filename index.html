@@ -2129,7 +2129,34 @@
                 return a.name.localeCompare(b.name);
             });
 
+            // RECORD PER SINGOLA EDIZIONE (GP + ANNO)
+            const editionBuckets = { weekend: {}, race: {}, quali: {}, fp: {}, sprint: {} };
+            periodLogs.forEach(lg => {
+                const gName = normalizeGpName(lg.gp);
+                const key = `${gName}|${lg.year}`;
+                const add = (bucket) => {
+                    if (!bucket[key]) bucket[key] = { name: `${gName} ${lg.year}`, gp: gName, year: String(lg.year), count: 0 };
+                    bucket[key].count += 1;
+                };
+                add(editionBuckets.weekend);
+                const cat = getSessionCategory(lg.session);
+                if (editionBuckets[cat]) add(editionBuckets[cat]);
+            });
+            const sortEditions = (obj) => Object.values(obj).sort((a, b) => {
+                if (b.count !== a.count) return b.count - a.count;
+                if (b.year !== a.year) return Number(b.year) - Number(a.year);
+                return a.gp.localeCompare(b.gp);
+            });
+            const editionRankings = {
+                weekend: sortEditions(editionBuckets.weekend),
+                race: sortEditions(editionBuckets.race),
+                quali: sortEditions(editionBuckets.quali),
+                fp: sortEditions(editionBuckets.fp),
+                sprint: sortEditions(editionBuckets.sprint)
+            };
+
             return {
+                editionRankings,
                 driverHof: sortHof(Object.values(driverHofMap)),
                 constructorHof: sortHof(Object.values(constructorHofMap)),
                 gpHof: sortHof(Object.values(gpHofMap)),
@@ -2579,7 +2606,7 @@
 
                 const condStats = stats.conditionRankings[state.statsTab];
                 const condRows = [
-                    { id: 'wet', label: '🌧️ RE DEL BAGNATO (PISTA BAGNATA)', list: condStats.wet },
+                    { id: 'wet', label: '🌧️ MURI SUL BAGNATO (PISTA BAGNATA)', list: condStats.wet },
                     { id: 'dry', label: "☀️ MURI SULL'ASCIUTTO (PISTA ASCIUTTA)", list: condStats.dry }
                 ];
 
@@ -2734,6 +2761,75 @@
                                 }).join('')}
                             </div>
                         </div>
+
+                        ${(state.statsTab === 'gps' && state.statsPeriod === 'ALL_TIME') ? `
+                            <!-- RECORD PER SINGOLA EDIZIONE (GP + ANNO) -->
+                            <div class="bg-[#131823] border border-[#232B42] rounded-3xl overflow-hidden">
+                                <div class="px-4 py-4 border-b border-[#232B42]">
+                                    <h3 class="text-sm sm:text-base font-black uppercase tracking-wide text-white">
+                                        Record per Singola Edizione
+                                    </h3>
+                                    <p class="text-[11px] font-mono text-gray-400 mt-0.5">Il singolo Gran Premio (con anno) con più muri</p>
+                                </div>
+                                <div class="divide-y divide-[#232B42]/70">
+                                    ${[
+                                        { id: 'weekend', label: 'INTERO WEEKEND', icon: 'fa-calendar-days text-emerald-400' },
+                                        { id: 'race', label: 'GARA (GP)', icon: 'fa-flag-checkered text-[#EF4444]' },
+                                        { id: 'quali', label: 'QUALIFICHE (Q1-Q3)', icon: 'fa-stopwatch text-amber-400' },
+                                        { id: 'fp', label: 'PROVE LIBERE (FP1-FP3)', icon: 'fa-wrench text-sky-400' },
+                                        { id: 'sprint', label: 'SPRINT & QUALI SPRINT', icon: 'fa-bolt text-purple-400' }
+                                    ].map(r => {
+                                        const list = stats.editionRankings[r.id] || [];
+                                        const leader = list[0];
+                                        const ties = leader ? list.filter(e => e.count === leader.count) : [];
+                                        const leaderLabel = !leader ? 'Nessun episodio'
+                                            : ties.length > 1 ? `${leader.name} (+${ties.length - 1} a pari merito)` : leader.name;
+                                        const eKey = `edition_${r.id}`;
+                                        const isOpen = state.expandedSessionKey === eKey;
+                                        return `
+                                            <div>
+                                                <button type="button" ${leader ? `data-action="toggle-session" data-key="${escapeHtml(eKey)}"` : ''}
+                                                    class="w-full px-4 py-3.5 hover:bg-[#192033] flex items-center justify-between gap-3 text-left transition cursor-pointer">
+                                                    <div class="min-w-0">
+                                                        <div class="flex items-center gap-1.5 text-[11px] font-mono font-bold uppercase tracking-wider text-gray-400">
+                                                            <i class="fa-solid ${r.icon}"></i><span>${r.label}</span>
+                                                        </div>
+                                                        <div class="flex items-center gap-2 mt-1">
+                                                            <span class="text-sm font-extrabold text-white truncate">${escapeHtml(leaderLabel)}</span>
+                                                            ${leader ? `<i class="fa-solid fa-chevron-down text-xs text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}"></i>` : ''}
+                                                        </div>
+                                                    </div>
+                                                    <span class="w-10 h-10 rounded-2xl bg-[#0B0E14] border border-[#232B42] flex items-center justify-center font-mono text-sm font-black text-white shrink-0">
+                                                        ${leader ? leader.count : 0}
+                                                    </span>
+                                                </button>
+                                                ${(isOpen && leader) ? `
+                                                    <div class="px-4 pb-4 pt-2 bg-[#0B0E14]/70 border-t border-[#232B42]/50 space-y-1.5 fade-in">
+                                                        <div class="text-[10px] font-mono uppercase tracking-wider text-gray-400 mb-1">
+                                                            Classifica edizioni (${list.length}):
+                                                        </div>
+                                                        <div class="flex flex-col gap-1.5 max-h-72 overflow-y-auto pr-1">
+                                                            ${list.map((entry, idx) => `
+                                                                <div class="w-full px-3 py-2 rounded-xl bg-[#131823] border border-[#232B42] flex items-center justify-between text-xs">
+                                                                    <div class="flex items-center gap-2.5 min-w-0">
+                                                                        <span class="font-mono text-[11px] font-bold text-gray-400 w-6 shrink-0">#${idx + 1}</span>
+                                                                        <span class="font-bold text-white truncate">${escapeHtml(entry.gp)}</span>
+                                                                        <span class="px-1.5 py-0.5 rounded bg-[#0B0E14] border border-[#232B42] font-mono text-[10px] text-gray-400 shrink-0">${escapeHtml(entry.year)}</span>
+                                                                    </div>
+                                                                    <span class="font-mono font-extrabold text-amber-300 shrink-0 ml-2">
+                                                                        ${entry.count} ${entry.count === 1 ? 'muro' : 'muri'}
+                                                                    </span>
+                                                                </div>
+                                                            `).join('')}
+                                                        </div>
+                                                    </div>
+                                                ` : ''}
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
 
                         <!-- CONDIZIONI PISTA (ASCIUTTO VS BAGNATO / RE DEL BAGNATO) -->
                         <div class="bg-[#131823] border border-[#232B42] rounded-3xl overflow-hidden">
