@@ -1058,16 +1058,30 @@
             return 0;
         }
 
+        // REGOLA PARI MERITO (classifiche, albo d'oro e statistiche):
+        // 1) valore principale (muri nel sistema 1 a 1, punti nel 6-5-4-3-2-1)
+        // 2) peso delle sessioni (punteggio 6-5-4-3-2-1)
+        // 3) chi ha raggiunto per primo quel totale (il suo ultimo muro è arrivato prima)
+        function logChronoKey(lg, fallbackYear) {
+            const yr = Number(lg.year || fallbackYear) || 0;
+            const rd = Number(lg.round) || 99;
+            const si = SESSIONS_LIST.indexOf(lg.session);
+            return yr * 100000 + rd * 100 + (si < 0 ? 50 : si);
+        }
+        function trackTie(entry, lg, fallbackYear) {
+            entry.weighted = (entry.weighted || 0) + getSessionPoints(lg.session, 'sixToOne');
+            entry.reachedAt = Math.max(entry.reachedAt || 0, logChronoKey(lg, fallbackYear));
+        }
+        function compareTie(a, b) {
+            const wa = a.weighted || 0, wb = b.weighted || 0;
+            if (wb !== wa) return wb - wa;
+            const ra = a.reachedAt || Number.MAX_SAFE_INTEGER, rb = b.reachedAt || Number.MAX_SAFE_INTEGER;
+            if (ra !== rb) return ra - rb;
+            return (a.name || '').localeCompare(b.name || '');
+        }
         function compareF1Entities(a, b) {
             if (b.score !== a.score) return b.score - a.score;
-            for (let t = 0; t <= 6; t++) {
-                const diff = (b.tiers[t] || 0) - (a.tiers[t] || 0);
-                if (diff !== 0) return diff;
-            }
-            const aFirst = a.reachedIndex ?? 999999;
-            const bFirst = b.reachedIndex ?? 999999;
-            if (aFirst !== bFirst) return aFirst - bFirst;
-            return (a.name || '').localeCompare(b.name || '');
+            return compareTie(a, b);
         }
 
         function normalizeGpName(gp) {
@@ -1814,6 +1828,7 @@
                         const pts = getSessionPoints(lg.session, state.scoringMode);
                         entry.totalCrashes += 1;
                         entry.totalPoints += pts;
+                        trackTie(entry, lg, yr);
                         entry.logs.push({ ...lg, year: yr, pts });
 
                         if (!entry.yearBreakdown[yr]) {
@@ -1839,6 +1854,7 @@
                         const pts = getSessionPoints(lg.session, state.scoringMode);
                         entry.totalCrashes += 1;
                         entry.totalPoints += pts;
+                        trackTie(entry, lg, state.activeView);
                         entry.logs.push({ ...lg, year: state.activeView, pts });
                     });
                 }
@@ -1850,8 +1866,7 @@
                     const valA = state.scoringMode === 'sixToOne' ? a.totalPoints : a.totalCrashes;
                     const valB = state.scoringMode === 'sixToOne' ? b.totalPoints : b.totalCrashes;
                     if (valB !== valA) return valB - valA;
-                    if (b.totalCrashes !== a.totalCrashes) return b.totalCrashes - a.totalCrashes;
-                    return a.name.localeCompare(b.name);
+                    return compareTie(a, b);
                 });
 
             const cMap = {};
@@ -1877,6 +1892,7 @@
                 }
                 cMap[name].crashes += 1;
                 cMap[name].points += pts;
+                trackTie(cMap[name], lg, state.activeView);
                 cMap[name].logs.push(lg);
 
                 const dName = lg.driverName || '—';
@@ -1912,8 +1928,7 @@
                 const valA = state.scoringMode === 'sixToOne' ? a.points : a.crashes;
                 const valB = state.scoringMode === 'sixToOne' ? b.points : b.crashes;
                 if (valB !== valA) return valB - valA;
-                if (b.crashes !== a.crashes) return b.crashes - a.crashes;
-                return a.name.localeCompare(b.name);
+                return compareTie(a, b);
             });
 
             const countedLogs = activeLogs.filter(countsInStandings);
@@ -1961,6 +1976,7 @@
                     dMap[dKey].score += pts;
                     dMap[dKey].tiers[tier] += 1;
                     dMap[dKey].reachedIndex = idx;
+                    trackTie(dMap[dKey], lg, yr);
 
                     const cCode = (lg.teamCode || 'UNK').toUpperCase();
                     const cName = lg.teamName || TEAM_NAME_MAP[cCode] || cCode;
@@ -1972,6 +1988,7 @@
                     cMap[cName].score += pts;
                     cMap[cName].tiers[tier] += 1;
                     cMap[cName].reachedIndex = idx;
+                    trackTie(cMap[cName], lg, yr);
 
                     const gName = normalizeGpName(lg.gp);
                     if (!gMap[gName]) {
@@ -1982,6 +1999,7 @@
                     gMap[gName].score += pts;
                     gMap[gName].tiers[tier] += 1;
                     gMap[gName].reachedIndex = idx;
+                    trackTie(gMap[gName], lg, yr);
                 });
 
                 const dWinner = Object.values(dMap).sort(compareF1Entities)[0];
@@ -2044,11 +2062,12 @@
                     }
                     if (!buckets[cat][key]) buckets[cat][key] = { name: key, badge, count: 0 };
                     buckets[cat][key].count += 1;
+                    trackTie(buckets[cat][key], lg);
                 });
 
                 const toSorted = (obj) => Object.values(obj).sort((a, b) => {
                     if (b.count !== a.count) return b.count - a.count;
-                    return a.name.localeCompare(b.name);
+                    return compareTie(a, b);
                 });
 
                 return {
@@ -2086,11 +2105,12 @@
                     const targetMap = isWet ? wetMap : dryMap;
                     if (!targetMap[key]) targetMap[key] = { name: key, badge, count: 0 };
                     targetMap[key].count += 1;
+                    trackTie(targetMap[key], lg);
                 });
 
                 const toSorted = (obj) => Object.values(obj).sort((a, b) => {
                     if (b.count !== a.count) return b.count - a.count;
-                    return a.name.localeCompare(b.name);
+                    return compareTie(a, b);
                 });
 
                 return {
@@ -2107,12 +2127,13 @@
                 if (!gpTotalMap[gName]) gpTotalMap[gName] = { name: gName, crashes: 0, points: 0 };
                 gpTotalMap[gName].crashes += 1;
                 gpTotalMap[gName].points += getSessionPoints(lg.session, state.scoringMode);
+                trackTie(gpTotalMap[gName], lg);
             });
             const gpOverall = Object.values(gpTotalMap).sort((a, b) => {
                 const valA = state.scoringMode === 'sixToOne' ? a.points : a.crashes;
                 const valB = state.scoringMode === 'sixToOne' ? b.points : b.crashes;
                 if (valB !== valA) return valB - valA;
-                return a.name.localeCompare(b.name);
+                return compareTie(a, b);
             });
 
             const circuitTotalMap = {};
@@ -2121,12 +2142,13 @@
                 if (!circuitTotalMap[cName]) circuitTotalMap[cName] = { name: cName, crashes: 0, points: 0 };
                 circuitTotalMap[cName].crashes += 1;
                 circuitTotalMap[cName].points += getSessionPoints(lg.session, state.scoringMode);
+                trackTie(circuitTotalMap[cName], lg);
             });
             const circuitOverall = Object.values(circuitTotalMap).sort((a, b) => {
                 const valA = state.scoringMode === 'sixToOne' ? a.points : a.crashes;
                 const valB = state.scoringMode === 'sixToOne' ? b.points : b.crashes;
                 if (valB !== valA) return valB - valA;
-                return a.name.localeCompare(b.name);
+                return compareTie(a, b);
             });
 
             // RECORD PER SINGOLA EDIZIONE (GP + ANNO)
@@ -2137,6 +2159,7 @@
                 const add = (bucket) => {
                     if (!bucket[key]) bucket[key] = { name: `${gName} ${lg.year}`, gp: gName, year: String(lg.year), count: 0 };
                     bucket[key].count += 1;
+                    trackTie(bucket[key], lg);
                 };
                 add(editionBuckets.weekend);
                 const cat = getSessionCategory(lg.session);
@@ -2144,8 +2167,7 @@
             });
             const sortEditions = (obj) => Object.values(obj).sort((a, b) => {
                 if (b.count !== a.count) return b.count - a.count;
-                if (b.year !== a.year) return Number(b.year) - Number(a.year);
-                return a.gp.localeCompare(b.gp);
+                return compareTie(a, b);
             });
             const editionRankings = {
                 weekend: sortEditions(editionBuckets.weekend),
