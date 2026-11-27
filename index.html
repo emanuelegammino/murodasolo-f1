@@ -1117,13 +1117,13 @@
                 'dutch': 'Olanda',
                 'olanda': 'Olanda',
                 'zandvoort': 'Olanda',
-                'italian': 'Italia (Monza)',
-                'monza': 'Italia (Monza)',
+                'italian': 'Italia',
+                'monza': 'Italia',
                 'azerbaijan': 'Azerbaijan',
                 'baku': 'Azerbaijan',
                 'singapore': 'Singapore',
-                'united states': 'Stati Uniti (Austin)',
-                'austin': 'Stati Uniti (Austin)',
+                'united states': 'Stati Uniti',
+                'austin': 'Stati Uniti',
                 'mexico city': 'Messico',
                 'messico': 'Messico',
                 'são paulo': 'Brasile',
@@ -1144,8 +1144,8 @@
                 'russian': 'Russia',
                 'styrian': 'Stiria',
                 '70th anniversary': '70° Anniversario',
-                'tuscan': 'Toscana (Mugello)',
-                'eifel': 'Eifel (Nürburgring)',
+                'tuscan': 'Toscana',
+                'eifel': 'Eifel',
                 'sakhir': 'Sakhir'
             };
             const key = clean.toLowerCase();
@@ -2121,7 +2121,21 @@
                 };
             };
 
+            // Anche i GP e i circuiti del calendario senza muri (0) compaiono in classifica
+            const periodYears = state.statsPeriod === 'ALL_TIME' ? sortedKeys : [state.statsPeriod];
+            const periodCalendar = [];
+            periodYears.forEach(yr => {
+                const cal = state.seasons[yr]?.calendar || CALENDARS_BY_YEAR[yr] || [];
+                cal.forEach(c => periodCalendar.push(c));
+            });
             const gpTotalMap = {};
+            const circuitTotalMap = {};
+            periodCalendar.forEach(c => {
+                const gName = normalizeGpName(c.gp);
+                if (c.gp && !gpTotalMap[gName]) gpTotalMap[gName] = { name: gName, crashes: 0, points: 0 };
+                const cName = (c.circuit || '').trim();
+                if (cName && !circuitTotalMap[cName]) circuitTotalMap[cName] = { name: cName, crashes: 0, points: 0 };
+            });
             periodLogs.forEach(lg => {
                 const gName = normalizeGpName(lg.gp);
                 if (!gpTotalMap[gName]) gpTotalMap[gName] = { name: gName, crashes: 0, points: 0 };
@@ -2136,7 +2150,6 @@
                 return compareTie(a, b);
             });
 
-            const circuitTotalMap = {};
             periodLogs.forEach(lg => {
                 const cName = (lg.circuit || '').trim() || 'Circuito non specificato';
                 if (!circuitTotalMap[cName]) circuitTotalMap[cName] = { name: cName, crashes: 0, points: 0 };
@@ -2922,14 +2935,15 @@
                                 </div>
                                 <div class="divide-y divide-[#232B42]/70">
                                     ${stats.gpOverall.map((g, idx) => {
-                                        const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : (idx + 1);
+                                        const isZero = g.crashes === 0;
+                                        const medal = isZero ? (idx + 1) : idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : (idx + 1);
                                         return `
                                             <div class="px-4 py-3 flex items-center justify-between gap-3">
                                                 <div class="flex items-center gap-3 min-w-0">
                                                     <span class="w-6 text-center font-mono text-xs font-bold text-gray-400 shrink-0">${medal}</span>
-                                                    <span class="text-sm font-bold text-white truncate">${escapeHtml(g.name)}</span>
+                                                    <span class="text-sm font-bold ${isZero ? 'text-gray-500' : 'text-white'} truncate">${escapeHtml(g.name)}</span>
                                                 </div>
-                                                <span class="font-mono text-sm font-black text-amber-300 shrink-0">
+                                                <span class="font-mono text-sm font-black ${isZero ? 'text-gray-500' : 'text-amber-300'} shrink-0">
                                                     ${state.scoringMode === 'sixToOne' ? `${g.points} pt` : g.crashes}
                                                 </span>
                                             </div>
@@ -2949,14 +2963,15 @@
                                 </div>
                                 <div class="divide-y divide-[#232B42]/70">
                                     ${stats.circuitOverall.map((c, idx) => {
-                                        const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : (idx + 1);
+                                        const isZero = c.crashes === 0;
+                                        const medal = isZero ? (idx + 1) : idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : (idx + 1);
                                         return `
                                             <div class="px-4 py-3 flex items-center justify-between gap-3">
                                                 <div class="flex items-center gap-3 min-w-0">
                                                     <span class="w-6 text-center font-mono text-xs font-bold text-gray-400 shrink-0">${medal}</span>
-                                                    <span class="text-sm font-bold text-white leading-snug">${escapeHtml(c.name)}</span>
+                                                    <span class="text-sm font-bold ${isZero ? 'text-gray-500' : 'text-white'} leading-snug">${escapeHtml(c.name)}</span>
                                                 </div>
-                                                <span class="font-mono text-sm font-black text-sky-300 shrink-0">
+                                                <span class="font-mono text-sm font-black ${isZero ? 'text-gray-500' : 'text-sky-300'} shrink-0">
                                                     ${state.scoringMode === 'sixToOne' ? `${c.points} pt` : c.crashes}
                                                 </span>
                                             </div>
