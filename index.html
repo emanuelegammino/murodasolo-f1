@@ -1592,33 +1592,16 @@
         const JOLPICA_API = 'https://api.jolpi.ca/ergast/f1';
         let gpStartsCache = (() => { try { return JSON.parse(localStorage.getItem(GP_STARTS_KEY) || '{}') || {}; } catch (_) { return {}; } })();
         let gpStartsLoading = false;
+        let gpStartsError = false;
         const normName = n => String(n || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
 
         async function fetchSeasonGpStarts(year) {
-            const full = {}, family = {};
-            let offset = 0, total = 1, rounds = new Set();
-            while (offset < total) {
-                const res = await fetch(`${JOLPICA_API}/${year}/results.json?limit=100&offset=${offset}`);
-                if (res.status === 429) { await new Promise(r => setTimeout(r, 3000)); continue; }
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                const json = await res.json();
-                const mr = json.MRData || {};
-                total = Number(mr.total || 0);
-                (mr.RaceTable?.Races || []).forEach(race => {
-                    rounds.add(race.round);
-                    (race.Results || []).forEach(r => {
-                        const st = String(r.status || '').toLowerCase();
-                        if (/did not start|withdrew|did not qualify|did not prequalify|not classified - dns/.test(st)) return;
-                        const fn = normName(`${r.Driver?.givenName || ''} ${r.Driver?.familyName || ''}`);
-                        const fam = normName(r.Driver?.familyName || '');
-                        full[fn] = (full[fn] || 0) + 1;
-                        family[fam] = (family[fam] || 0) + 1;
-                    });
-                });
-                offset += 100;
-                await new Promise(r => setTimeout(r, 350));
-            }
-            return { full, family, races: rounds.size, fetchedAt: Date.now() };
+            // Funzione Netlify che legge l'archivio Jolpica lato server
+            const res = await fetch(`/api/gp-starts?year=${encodeURIComponent(year)}`);
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const data = await res.json();
+            if (!data || !data.full) throw new Error('dati non validi');
+            return { full: data.full, family: data.family || {}, races: data.races || 0, fetchedAt: Date.now() };
         }
 
         async function ensureGpStarts() {
@@ -1633,12 +1616,16 @@
             });
             if (!todo.length) return;
             gpStartsLoading = true;
+            gpStartsError = false;
             try {
                 for (const y of todo) {
                     try {
                         gpStartsCache[y] = await fetchSeasonGpStarts(y);
                         try { localStorage.setItem(GP_STARTS_KEY, JSON.stringify(gpStartsCache)); } catch (_) {}
-                    } catch (_) { /* archivio non raggiungibile: si riprova al prossimo avvio */ }
+                    } catch (_) {
+                        // archivio non raggiungibile: si riprova al prossimo avvio
+                        if (!gpStartsCache[y]) gpStartsError = true;
+                    }
                 }
             } finally {
                 gpStartsLoading = false;
@@ -3373,7 +3360,9 @@
                                         <p class="text-[11px] font-mono text-gray-400 mt-0.5">Muri in rapporto ai GP disputati · minimo ${minGp} GP</p>
                                     </div>
                                     ${!ready ? `
-                                        <div class="px-4 py-4 text-xs text-gray-400">Caricamento dei GP disputati dall'archivio risultati… (serve la connessione)</div>
+                                        <div class="px-4 py-4 text-xs text-gray-400">${gpStartsError
+                                            ? 'Archivio dei risultati non raggiungibile in questo momento: riprova più tardi.'
+                                            : 'Caricamento dei GP disputati dall\'archivio risultati… (serve la connessione)'}</div>
                                     ` : !leader ? `
                                         <div class="px-4 py-4 text-xs text-gray-400">Nessun pilota con almeno ${minGp} GP in questo periodo.</div>
                                     ` : `

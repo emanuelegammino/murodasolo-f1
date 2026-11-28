@@ -2,7 +2,7 @@
 // Pagina: prima la rete (così gli aggiornamenti arrivano subito), copia in cache se offline.
 // Icone, font e librerie esterne: prima la cache.
 // I dati del cloud (Supabase) non passano mai dalla cache: offline l'app usa l'ultima copia salvata sul dispositivo.
-const CACHE = 'murodasolo-v1';
+const CACHE = 'murodasolo-v2';
 const CORE = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 const STATIC_HOSTS = ['cdnjs.cloudflare.com', 'fonts.googleapis.com', 'fonts.gstatic.com', 'cdn.sheetjs.com'];
 
@@ -24,6 +24,7 @@ self.addEventListener('fetch', event => {
   const url = new URL(req.url);
 
   if (url.hostname.endsWith('supabase.co')) return; // dati: sempre dalla rete
+  if (url.origin === self.location.origin && url.pathname.startsWith('/api/')) return; // funzioni Netlify: sempre dalla rete
 
   if (req.mode === 'navigate') {
     event.respondWith(
