@@ -105,13 +105,12 @@
         const AUTH_SESSION_KEY = 'murodasolo_f1_auth_v1';
         const AUTH_EMAIL_KEY = 'murodasolo_f1_auth_email_v1';
 
-        const IS_PUBLIC_VIEW = (() => {
-            try {
-                const params = new URLSearchParams(window.location.search);
-                return params.get('view') === '1' || params.get('public') === '1';
-            } catch (_) {
-                return false;
-            }
+        // Link unico per tutti: chi non ha fatto l'accesso vede l'app da spettatore.
+        // I vecchi link con ?view=1 continuano a funzionare e aprono la stessa app.
+        const IS_PUBLIC_VIEW = false;
+        // Accesso admin nascosto: 5 tocchi sul logo, oppure l'indirizzo con ?admin
+        const ADMIN_ENTRY = (() => {
+            try { return new URLSearchParams(window.location.search).has('admin'); } catch (_) { return false; }
         })();
 
         // ==========================================
@@ -1540,6 +1539,7 @@
         // File pronto da salvare: i browser dei telefoni accettano download e condivisione
         // solo se partono da un tocco diretto, quindi li offriamo in una finestra con pulsanti veri.
         let pendingFile = null; // { blob, url, filename, label, text }
+        let logoTaps = [];
 
         // Scuderie personalizzate: tutte le sigle presenti nei dati che non sono tra quelle ufficiali
         function getCustomTeams() {
@@ -2555,7 +2555,7 @@
                 <header class="sticky top-0 z-40 bg-[#0B0E14]/95 backdrop-blur-md border-b border-[#232B42]">
                     <div class="max-w-3xl mx-auto px-4 py-3.5 flex items-center justify-between gap-3">
                         <div data-action="go-alltime" class="flex items-center gap-3.5 min-w-0 cursor-pointer select-none">
-                            ${renderBrandLogoHtml()}
+                            <span data-action="logo-tap" class="shrink-0">${renderBrandLogoHtml()}</span>
                             <div class="min-w-0">
                                 <div class="flex items-center gap-2 flex-wrap">
                                     <h1 class="text-[22px] sm:text-3xl font-black tracking-tight leading-none text-white">
@@ -2720,8 +2720,8 @@
                                 <i class="fa-solid fa-chevron-right text-xs text-gray-400"></i>
                             </button>
 
-                            <!-- 4) GESTIONE ADMIN & CLOUD (BLINDATO IN ?view=1) -->
-                            ${!IS_PUBLIC_VIEW ? `
+                            <!-- 4) GESTIONE ADMIN & CLOUD (visibile solo all'admin o con ?admin) -->
+                            ${(state.isAdmin || ADMIN_ENTRY) ? `
                                 <div class="rounded-2xl bg-[#0B0E14] border border-[#232B42] overflow-hidden">
                                     <button type="button" data-action="toggle-acc" data-acc="admin"
                                         class="w-full px-4 py-3.5 flex items-center justify-between text-left cursor-pointer">
@@ -2777,6 +2777,7 @@
                                                     <span>Esci Admin</span>
                                                 </button>
                                             `}
+                                            ${state.isAdmin ? `
                                             <div class="grid grid-cols-2 gap-2">
                                                 <button type="button" data-action="open-modal" data-modal="cloud"
                                                     class="py-2.5 px-3 rounded-xl bg-[#131823] border border-[#232B42] hover:border-sky-400 text-sky-300 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer">
@@ -2794,6 +2795,7 @@
                                                 <i class="fa-solid fa-file-excel"></i>
                                                 <span>Esporta Registro in Excel</span>
                                             </button>
+                                            ` : ''}
                                             ${state.isAdmin ? `
                                                 <div class="space-y-2 pt-1">
                                                     <label class="w-full py-2 px-3 rounded-xl bg-[#131823] border border-dashed border-[#232B42] hover:border-gray-400 text-gray-300 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer">
@@ -4199,7 +4201,24 @@
             if (!btn) return;
             const action = btn.getAttribute('data-action');
 
-            if (action === 'go-alltime') {
+            if (action === 'logo-tap') {
+                // 5 tocchi ravvicinati sul logo aprono l'accesso admin
+                const now = Date.now();
+                logoTaps = logoTaps.filter(t => now - t < 2500);
+                logoTaps.push(now);
+                if (!state.isAdmin && logoTaps.length >= 5) {
+                    logoTaps = [];
+                    state.menuOpen = false;
+                    state.activeModal = 'pin';
+                    render();
+                    return;
+                }
+                state.activeView = 'ALL_TIME';
+                state.menuOpen = false;
+                state.logGpFilter = '';
+                state.logCircuitFilter = '';
+                render();
+            } else if (action === 'go-alltime') {
                 state.activeView = 'ALL_TIME';
                 state.menuOpen = false;
                 state.logGpFilter = '';
@@ -4348,7 +4367,8 @@
             } else if (action === 'copy-public-link') {
                 try {
                     const url = new URL(window.location.href);
-                    url.searchParams.set('view', '1');
+                    url.search = '';
+                    url.hash = '';
                     const text = url.toString();
                     if (navigator.clipboard && navigator.clipboard.writeText) {
                         await navigator.clipboard.writeText(text);
@@ -4361,9 +4381,9 @@
                         document.body.removeChild(tmp);
                     }
                     state.menuOpen = false;
-                    showToast('Link pubblico (?view=1) copiato negli appunti!', 'success');
+                    showToast('Link dell\'app copiato negli appunti!', 'success');
                 } catch (_) {
-                    showToast('Aggiungi ?view=1 all\'URL per la vista pubblica.', 'info');
+                    showToast('Copia non riuscita: condividi semplicemente l\'indirizzo del sito.', 'info');
                 }
             } else if (action === 'lock-admin') {
                 state.isAdmin = false;
