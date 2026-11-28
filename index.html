@@ -277,6 +277,32 @@
         // 3. CALENDARI UFFICIALI FIA (2020 - 2026)
         // ==========================================
         const CALENDARS_BY_YEAR = {
+            '2027': [
+                { round: 1, gp: 'Bahrain Grand Prix', circuit: 'Bahrain International Circuit', keys: ['bahrain', 'sakhir'] },
+                { round: 2, gp: 'Saudi Arabian Grand Prix', circuit: 'Jeddah Corniche Circuit', keys: ['saudi', 'arabia', 'jeddah'] },
+                { round: 3, gp: 'Australian Grand Prix', circuit: 'Albert Park Circuit', keys: ['australia', 'australian', 'melbourne', 'albert park'] },
+                { round: 4, gp: 'Japanese Grand Prix', circuit: 'Suzuka International Racing Course', keys: ['japan', 'japanese', 'giappone', 'suzuka'] },
+                { round: 5, gp: 'Chinese Grand Prix', circuit: 'Shanghai International Circuit', keys: ['china', 'chinese', 'cina', 'shanghai'] },
+                { round: 6, gp: 'Miami Grand Prix', circuit: 'Miami International Autodrome', keys: ['miami'] },
+                { round: 7, gp: 'Canadian Grand Prix', circuit: 'Circuit Gilles-Villeneuve', keys: ['canada', 'canadian', 'montreal', 'montréal', 'gilles'] },
+                { round: 8, gp: 'Monaco Grand Prix', circuit: 'Circuit de Monaco', keys: ['monaco', 'montecarlo'] },
+                { round: 9, gp: 'Portuguese Grand Prix', circuit: 'Autódromo Internacional do Algarve', keys: ['portuguese', 'portugal', 'portogallo', 'portimao', 'portimão', 'algarve'] },
+                { round: 10, gp: 'British Grand Prix', circuit: 'Silverstone Circuit', keys: ['british', 'silverstone', 'gran bretagna'] },
+                { round: 11, gp: 'Austrian Grand Prix', circuit: 'Red Bull Ring', keys: ['austria', 'austrian', 'spielberg', 'red bull ring'] },
+                { round: 12, gp: 'Belgian Grand Prix', circuit: 'Circuit de Spa-Francorchamps', keys: ['belgian', 'belgio', 'spa'] },
+                { round: 13, gp: 'Hungarian Grand Prix', circuit: 'Hungaroring', keys: ['hungary', 'hungarian', 'ungheria', 'budapest', 'hungaroring'] },
+                { round: 14, gp: 'Italian Grand Prix', circuit: 'Autodromo Nazionale Monza', keys: ['italian', 'monza', 'italia'] },
+                { round: 15, gp: 'Spanish Grand Prix', circuit: 'Madring', keys: ['spanish', 'spain', 'spagna', 'madrid', 'madring'] },
+                { round: 16, gp: 'Azerbaijan Grand Prix', circuit: 'Baku City Circuit', keys: ['azerbaijan', 'baku'] },
+                { round: 17, gp: 'Turkish Grand Prix', circuit: 'Intercity Istanbul Park', keys: ['turkish', 'turkey', 'turchia', 'istanbul'] },
+                { round: 18, gp: 'Singapore Grand Prix', circuit: 'Marina Bay Street Circuit', keys: ['singapore', 'marina bay'] },
+                { round: 19, gp: 'United States Grand Prix', circuit: 'Circuit of the Americas', keys: ['united states', 'austin', 'americas'] },
+                { round: 20, gp: 'Mexico City Grand Prix', circuit: 'Autódromo Hermanos Rodríguez', keys: ['mexico', 'messico', 'hermanos'] },
+                { round: 21, gp: 'São Paulo Grand Prix', circuit: 'Autódromo José Carlos Pace', keys: ['são paulo', 'sao paulo', 'brasile', 'interlagos', 'carlos pace'] },
+                { round: 22, gp: 'Las Vegas Grand Prix', circuit: 'Las Vegas Strip Circuit', keys: ['las vegas', 'vegas'] },
+                { round: 23, gp: 'Qatar Grand Prix', circuit: 'Lusail International Circuit', keys: ['qatar', 'lusail'] },
+                { round: 24, gp: 'Abu Dhabi Grand Prix', circuit: 'Yas Marina Circuit', keys: ['abu dhabi', 'yas marina'] }
+            ],
             '2026': [
                 { round: 1, gp: 'Australian Grand Prix', circuit: 'Albert Park Circuit', keys: ['australia', 'australian', 'melbourne', 'albert park'] },
                 { round: 2, gp: 'Chinese Grand Prix', circuit: 'Shanghai International Circuit', keys: ['china', 'chinese', 'cina', 'shanghai'] },
@@ -5190,6 +5216,16 @@
                     showToast('Stagione 2020 creata con 23 piloti e 17 Round!', 'success');
                     return;
                 }
+                // Calendario: preimpostato nell'app, altrimenti dall'archivio ufficiale (se già pubblicato),
+                // altrimenti quello della stagione più recente da correggere a mano
+                let remoteCal = null;
+                if (!CALENDARS_BY_YEAR[yr]) {
+                    try {
+                        const r = await fetch(`/api/calendar?year=${encodeURIComponent(yr)}`);
+                        const j = r.ok ? await r.json() : null;
+                        if (j && Array.isArray(j.races) && j.races.length) remoteCal = j.races;
+                    } catch (_) {}
+                }
                 const latestSeason = state.seasons[getSortedSeasonKeys()[0]];
                 const clonedDrivers = (latestSeason?.drivers || []).map((d, idx) => ({
                     id: `d_${yr}_${idx}_${Date.now()}`,
@@ -5206,7 +5242,7 @@
                     [yr]: {
                         label: yr,
                         status: Number(yr) >= 2026 ? 'active' : 'completed',
-                        calendar: (CALENDARS_BY_YEAR[yr] || CALENDARS_BY_YEAR['2026']).map(({ round, gp, circuit }) => ({ round, gp, circuit })),
+                        calendar: (CALENDARS_BY_YEAR[yr] || remoteCal || latestSeason?.calendar || CALENDARS_BY_YEAR['2026']).map(({ round, gp, circuit }) => ({ round, gp, circuit })),
                         drivers: clonedDrivers,
                         logs: []
                     }
