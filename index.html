@@ -2032,6 +2032,27 @@
             return ok;
         }
 
+        // Episodio già presente? (stesso pilota, stessa sessione, stesso GP/round)
+        function findDuplicateLog(year, log, excludeId) {
+            const logs = state.seasons[year]?.logs || [];
+            const gpN = normalizeGpName(log.gp);
+            return logs.find(l => l.id !== excludeId
+                && l.driverName === log.driverName
+                && l.session === log.session
+                && ((l.round && log.round) ? Number(l.round) === Number(log.round) : normalizeGpName(l.gp) === gpN)) || null;
+        }
+
+        function confirmIfDuplicate(year, log, excludeId, proceed) {
+            const dup = findDuplicateLog(year, log, excludeId);
+            if (!dup) { proceed(); return; }
+            openConfirm({
+                title: 'Episodio già registrato?',
+                msg: `C'è già un muro di ${log.driverName} in ${sessionLabel(log.session)} nel GP ${normalizeGpName(dup.gp)} ${year}${dup.round ? ` (R${dup.round})` : ''}. Vuoi registrarlo comunque come secondo episodio?`,
+                confirmLabel: 'Registra comunque',
+                onConfirm: proceed
+            });
+        }
+
         function openConfirm(dialog) {
             state.confirmDialog = dialog;
             state.activeModal = 'confirm';
@@ -5073,19 +5094,21 @@
                     noDamage: state.logNoDamage ? true : undefined
                 };
 
-                state.logDriver = drvObj.name;
-                state.logRound = rnd;
-                state.logSession = sess;
-                state.logCondition = 'dry';
-                state.logNote = '';
-                state.logUrl = '';
-                state.logNoDamage = false;
-
-                commitSeasonsUpdate({
-                    ...state.seasons,
-                    [yr]: { ...s, logs: [...(s.logs || []), newLog] }
+                confirmIfDuplicate(yr, newLog, null, () => {
+                    state.logDriver = drvObj.name;
+                    state.logRound = rnd;
+                    state.logSession = sess;
+                    state.logCondition = 'dry';
+                    state.logNote = '';
+                    state.logUrl = '';
+                    state.logNoDamage = false;
+                    const cur = state.seasons[yr];
+                    commitSeasonsUpdate({
+                        ...state.seasons,
+                        [yr]: { ...cur, logs: [...(cur.logs || []), newLog] }
+                    });
+                    showToast(`Muro registrato (${yr}) per ${drvObj.name}!`, 'success');
                 });
-                showToast(`Muro registrato (${yr}) per ${drvObj.name}!`, 'success');
             } else if (id === 'modal-quicklog-form') {
                 const yr = document.getElementById('ql-year')?.value || state.quickLogYear;
                 if (!state.isAdmin || !state.seasons[yr]) return;
@@ -5132,14 +5155,17 @@
                     noDamage: state.quickLogNoDamage ? true : undefined
                 };
 
-                state.quickLogCondition = 'dry';
-                state.quickLogNoDamage = false;
-                state.activeModal = null;
-                commitSeasonsUpdate({
-                    ...state.seasons,
-                    [yr]: { ...s, logs: [...(s.logs || []), newLog] }
+                confirmIfDuplicate(yr, newLog, null, () => {
+                    state.quickLogCondition = 'dry';
+                    state.quickLogNoDamage = false;
+                    state.activeModal = null;
+                    const cur = state.seasons[yr];
+                    commitSeasonsUpdate({
+                        ...state.seasons,
+                        [yr]: { ...cur, logs: [...(cur.logs || []), newLog] }
+                    });
+                    showToast(`Muro registrato (${yr}) per ${drvObj.name}!`, 'success');
                 });
-                showToast(`Muro registrato (${yr}) per ${drvObj.name}!`, 'success');
             } else if (id === 'modal-newseason-form') {
                 const yr = (document.getElementById('new-season-input')?.value || '').trim();
                 if (!/^\d{4}$/.test(yr)) {
@@ -5264,6 +5290,19 @@
                 }
 
                 const cond = state.editingLogForm.condition === 'wet' ? 'wet' : 'dry';
+                const probe = { driverName, session, gp, round: roundVal ? Number(roundVal) : undefined };
+                if (findDuplicateLog(year, probe, logId) && !state.editingLogForm.dupOk) {
+                    const form = state.editingLogForm;
+                    const dup = findDuplicateLog(year, probe, logId);
+                    // conserva quanto digitato, così il secondo "Salva" non perde le modifiche
+                    state.editingLogForm = {
+                        ...form, dupOk: true, driverName, teamCode, round: roundVal, session, note, url,
+                        gpCustom: form.gpSelect === '__CUSTOM__' ? gp : form.gpCustom,
+                        circuitCustom: form.circuitSelect === '__CUSTOM__' ? circuit : form.circuitCustom
+                    };
+                    showToast(`Attenzione: c'è già un muro di ${driverName} in ${sessionLabel(session)} nel GP ${normalizeGpName(dup.gp)}. Premi di nuovo Salva per confermare.`, 'error');
+                    return;
+                }
                 const updatedLogs = (s.logs || []).map(item => {
                     if (item.id !== logId) return item;
                     return {
