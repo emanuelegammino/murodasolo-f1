@@ -11,7 +11,7 @@ export default async (req) => {
     return new Response(JSON.stringify({ error: 'anno non valido' }), { status: 400, headers: { 'content-type': 'application/json' } });
   }
   try {
-    const full = {}, family = {};
+    const full = {}, family = {}, dnsFull = {}, dnsFamily = {};
     const rounds = new Set();
     let offset = 0, total = 1, attempts = 0;
     while (offset < total) {
@@ -25,9 +25,15 @@ export default async (req) => {
         rounds.add(race.round);
         for (const r of (race.Results || [])) {
           const st = String(r.status || '').toLowerCase();
-          if (/did not start|withdrew|did not qualify|did not prequalify/.test(st)) continue;
           const fn = norm(`${r.Driver?.givenName || ''} ${r.Driver?.familyName || ''}`);
           const fam = norm(r.Driver?.familyName || '');
+          if (/did not start|withdrew|did not qualify|did not prequalify/.test(st)) {
+            // non partito: utile per i muri nel giro di formazione (contati come GP disputato)
+            const rd = Number(race.round);
+            (dnsFull[fn] = dnsFull[fn] || []).push(rd);
+            (dnsFamily[fam] = dnsFamily[fam] || []).push(rd);
+            continue;
+          }
           full[fn] = (full[fn] || 0) + 1;
           family[fam] = (family[fam] || 0) + 1;
         }
@@ -37,7 +43,7 @@ export default async (req) => {
     }
     const thisYear = new Date().getFullYear();
     const maxAge = Number(year) < thisYear ? 7 * 24 * 3600 : 6 * 3600;
-    return new Response(JSON.stringify({ year, races: rounds.size, full, family }), {
+    return new Response(JSON.stringify({ year, races: rounds.size, full, family, dnsFull, dnsFamily }), {
       status: 200,
       headers: { 'content-type': 'application/json', 'cache-control': `public, max-age=${maxAge}`, 'netlify-cdn-cache-control': `public, max-age=${maxAge}` }
     });

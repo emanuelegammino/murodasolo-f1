@@ -1588,7 +1588,7 @@
         // ==========================================
         // GP DISPUTATI (archivio pubblico Jolpica/Ergast) PER L'INCIDENZA MURI
         // ==========================================
-        const GP_STARTS_KEY = 'murodasolo_gp_starts_v1';
+        const GP_STARTS_KEY = 'murodasolo_gp_starts_v2';
         const JOLPICA_API = 'https://api.jolpi.ca/ergast/f1';
         let gpStartsCache = (() => { try { return JSON.parse(localStorage.getItem(GP_STARTS_KEY) || '{}') || {}; } catch (_) { return {}; } })();
         let gpStartsLoading = false;
@@ -1601,7 +1601,7 @@
             if (!res.ok) throw new Error('HTTP ' + res.status);
             const data = await res.json();
             if (!data || !data.full) throw new Error('dati non validi');
-            return { full: data.full, family: data.family || {}, races: data.races || 0, fetchedAt: Date.now() };
+            return { full: data.full, family: data.family || {}, dnsFull: data.dnsFull || {}, dnsFamily: data.dnsFamily || {}, races: data.races || 0, fetchedAt: Date.now() };
         }
 
         async function ensureGpStarts() {
@@ -1643,8 +1643,18 @@
                 const c = gpStartsCache[y];
                 if (!c) return null;
                 any = true;
+                const byFull = c.full[fn] != null || (c.dnsFull && c.dnsFull[fn]);
                 if (c.full[fn] != null) tot += c.full[fn];
                 else if (c.family[fam] != null) tot += c.family[fam];
+                // GP in cui risulta "non partito" ma ha un muro in gara nel registro
+                // (es. muro nel giro di formazione): per noi è un GP disputato
+                const dns = (byFull ? c.dnsFull?.[fn] : c.dnsFamily?.[fam]) || [];
+                if (dns.length) {
+                    const raceRounds = new Set((state.seasons[y]?.logs || [])
+                        .filter(lg => lg.driverName && normName(lg.driverName) === fn && getSessionCategory(lg.session) === 'race')
+                        .map(lg => Number(lg.round)));
+                    new Set(dns).forEach(rd => { if (raceRounds.has(rd)) tot += 1; });
+                }
             }
             return any ? tot : null;
         }
