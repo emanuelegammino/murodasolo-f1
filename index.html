@@ -94,6 +94,8 @@
         const STORAGE_KEY = 'murodasolo_f1_db_native_v5';
         const CLOUD_CFG_KEY = 'murodasolo_f1_cloud_native_v5';
         const ADMIN_SESSION_KEY = 'murodasolo_f1_admin_native_v5';
+        const AUTH_SESSION_KEY = 'murodasolo_f1_auth_v1';
+        const AUTH_EMAIL_KEY = 'murodasolo_f1_auth_email_v1';
 
         const IS_PUBLIC_VIEW = (() => {
             try {
@@ -193,6 +195,58 @@
                 H[4] = (H[4] + e) | 0; H[5] = (H[5] + f) | 0; H[6] = (H[6] + g) | 0; H[7] = (H[7] + h) | 0;
             }
             return H.map(x => (x >>> 0).toString(16).padStart(8, '0')).join('');
+        }
+
+        // ==========================================
+        // ACCESSO ADMIN (Supabase Auth: email + password)
+        // ==========================================
+        function loadAuthSession() {
+            try {
+                const raw = localStorage.getItem(AUTH_SESSION_KEY);
+                const sess = raw ? JSON.parse(raw) : null;
+                return sess && sess.access_token && sess.refresh_token ? sess : null;
+            } catch (_) { return null; }
+        }
+        function saveAuthSession(data) {
+            const sess = {
+                access_token: data.access_token,
+                refresh_token: data.refresh_token,
+                expires_at: data.expires_at || (Math.floor(Date.now() / 1000) + (data.expires_in || 3600)),
+                email: data.user?.email || ''
+            };
+            try { localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(sess)); } catch (_) {}
+            return sess;
+        }
+        function clearAuthSession() {
+            try { localStorage.removeItem(AUTH_SESSION_KEY); sessionStorage.removeItem(ADMIN_SESSION_KEY); } catch (_) {}
+        }
+        async function authRequest(baseUrl, apiKey, grant, body) {
+            const res = await fetch(`${baseUrl}/auth/v1/token?grant_type=${grant}`, {
+                method: 'POST',
+                headers: { 'apikey': apiKey, 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.access_token) {
+                const err = new Error(data.error_description || data.msg || data.error || ('HTTP ' + res.status));
+                err.status = res.status;
+                throw err;
+            }
+            return data;
+        }
+        // Restituisce un token valido (rinnovandolo se sta per scadere) oppure null
+        async function getAccessToken(baseUrl, apiKey) {
+            const sess = loadAuthSession();
+            if (!sess) return null;
+            const now = Math.floor(Date.now() / 1000);
+            if (sess.expires_at && sess.expires_at - 60 > now) return sess.access_token;
+            try {
+                const data = await authRequest(baseUrl, apiKey, 'refresh_token', { refresh_token: sess.refresh_token });
+                return saveAuthSession(data).access_token;
+            } catch (e) {
+                if (e.status === 400 || e.status === 401 || e.status === 403) clearAuthSession();
+                return null;
+            }
         }
 
         function hashPin(pin) {
@@ -1306,11 +1360,7 @@
 
             isAdmin: (() => {
                 if (IS_PUBLIC_VIEW) return false;
-                try {
-                    return sessionStorage.getItem(ADMIN_SESSION_KEY) === '1';
-                } catch (_) {
-                    return false;
-                }
+                return !!loadAuthSession();
             })(),
 
             menuOpen: false,
@@ -1730,25 +1780,40 @@
                     }
                 }
 
+                const token = await getAccessToken(baseUrl, apiKey);
+                if (!token) {
+                    state.isAdmin = false;
+                    state.cloudStatus = 'error';
+                    showToast('Sessione admin scaduta: modifica salvata solo qui. Rientra e premi "Invia" nel menu Cloud.', 'error');
+                    render();
+                    return false;
+                }
+
                 const nowIso = new Date().toISOString();
                 const payloadBody = {
                     id: state.cloudRowId || 'main',
                     [col]: {
                         seasons: nextSeasons,
-                        adminPinHash: state.cloudCfg.pinHash || hashPin(DEFAULT_ADMIN_PIN),
                         updatedAt: nowIso
                     }
                 };
 
                 const res = await fetch(`${baseUrl}/rest/v1/app_state?on_conflict=id`, {
                     method: 'POST',
-                    headers: supabaseHeaders(apiKey, {
-                        'Content-Type': 'application/json',
-                        'Prefer': 'resolution=merge-duplicates,return=minimal'
-                    }),
+                    headers: {
+                        ...supabaseHeaders(apiKey, {
+                            'Content-Type': 'application/json',
+                            'Prefer': 'resolution=merge-duplicates,return=minimal'
+                        }),
+                        'Authorization': `Bearer ${token}`
+                    },
                     body: JSON.stringify(payloadBody)
                 });
 
+                if (res.status === 401 || res.status === 403) {
+                    showToast('Il cloud ha rifiutato il salvataggio: accesso admin non valido. Esci e rientra.', 'error');
+                    throw new Error('HTTP ' + res.status);
+                }
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 state.remoteUpdatedAt = nowIso;
                 state.hasHydratedCloud = true;
@@ -2548,7 +2613,7 @@
                                                 <button type="button" data-action="open-modal" data-modal="pin"
                                                     class="w-full py-2.5 px-3.5 rounded-xl bg-[#DC0000] hover:bg-[#EF4444] text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer">
                                                     <i class="fa-solid fa-key"></i>
-                                                    <span>Sblocca Area Admin</span>
+                                                    <span>Accedi come Admin</span>
                                                 </button>
                                             ` : `
                                                 <button type="button" data-action="open-quick-log"
@@ -2583,7 +2648,7 @@
                                                 <button type="button" data-action="open-modal" data-modal="cloud"
                                                     class="py-2.5 px-3 rounded-xl bg-[#131823] border border-[#232B42] hover:border-sky-400 text-sky-300 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer">
                                                     <i class="fa-solid fa-cloud"></i>
-                                                    <span>Cloud &amp; PIN</span>
+                                                    <span>Cloud</span>
                                                 </button>
                                                 <button type="button" data-action="export-json"
                                                     class="py-2.5 px-3 rounded-xl bg-[#131823] border border-[#232B42] hover:border-gray-400 text-gray-200 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer">
@@ -3651,13 +3716,18 @@
                         <form id="modal-pin-form" class="w-full max-w-sm bg-[#131823] border border-[#232B42] rounded-3xl p-5 space-y-4 shadow-2xl">
                             <div class="flex items-center gap-2.5">
                                 <i class="fa-solid fa-key text-[#EF4444]"></i>
-                                <h3 class="text-base font-black text-white">Sblocca Area Admin</h3>
+                                <h3 class="text-base font-black text-white">Accesso Admin</h3>
                             </div>
-                            <input type="password" id="pin-input-field" placeholder="Inserisci PIN Admin..." autofocus
-                                class="w-full px-4 py-3 rounded-2xl bg-[#0B0E14] border border-[#232B42] text-sm font-mono text-white focus:outline-none focus:border-[#EF4444]">
+                            <div class="space-y-2.5">
+                                <input type="email" id="login-email-field" placeholder="Email" autocomplete="username"
+                                    value="${escapeHtml((() => { try { return localStorage.getItem(AUTH_EMAIL_KEY) || ''; } catch (_) { return ''; } })())}"
+                                    class="w-full px-4 py-3 rounded-2xl bg-[#0B0E14] border border-[#232B42] text-sm text-white focus:outline-none focus:border-[#EF4444]">
+                                <input type="password" id="login-password-field" placeholder="Password" autocomplete="current-password" autofocus
+                                    class="w-full px-4 py-3 rounded-2xl bg-[#0B0E14] border border-[#232B42] text-sm text-white focus:outline-none focus:border-[#EF4444]">
+                            </div>
                             <div class="flex justify-end gap-2">
                                 <button type="button" data-action="close-modal" class="px-4 py-2 rounded-xl text-xs text-gray-400 hover:text-white cursor-pointer">Annulla</button>
-                                <button type="submit" class="px-4 py-2 rounded-xl bg-[#DC0000] hover:bg-[#EF4444] text-white text-xs font-extrabold cursor-pointer">Sblocca</button>
+                                <button type="submit" class="px-4 py-2 rounded-xl bg-[#DC0000] hover:bg-[#EF4444] text-white text-xs font-extrabold cursor-pointer">Accedi</button>
                             </div>
                         </form>
                     `;
@@ -3910,7 +3980,7 @@
                             <div class="flex items-center justify-between">
                                 <div class="flex items-center gap-2.5">
                                     <i class="fa-solid fa-cloud text-sky-400"></i>
-                                    <h3 class="text-base font-black text-white">Cloud Supabase &amp; PIN</h3>
+                                    <h3 class="text-base font-black text-white">Cloud Supabase</h3>
                                 </div>
                                 <span class="text-[11px] font-mono font-bold ${state.cloudStatus === 'error' ? 'text-red-400' : 'text-emerald-400'}">
                                     ${state.cloudStatus === 'error' ? 'Offline' : 'Connesso'}
@@ -3925,11 +3995,6 @@
                                 <div>
                                     <label class="text-[11px] font-mono text-gray-400">Anon Key</label>
                                     <input type="text" id="cloud-key-input" value="${escapeHtml(state.cloudCfg.key)}"
-                                        class="w-full mt-1 px-3 py-2 rounded-xl bg-[#0B0E14] border border-[#232B42] text-xs font-mono text-white">
-                                </div>
-                                <div>
-                                    <label class="text-[11px] font-mono text-gray-400">Nuovo PIN Admin (lascia vuoto per non cambiarlo)</label>
-                                    <input type="password" id="cloud-pin-input" value="" placeholder="••••" autocomplete="new-password"
                                         class="w-full mt-1 px-3 py-2 rounded-xl bg-[#0B0E14] border border-[#232B42] text-xs font-mono text-white">
                                 </div>
                             </div>
@@ -4139,7 +4204,12 @@
                 }
             } else if (action === 'lock-admin') {
                 state.isAdmin = false;
-                try { sessionStorage.removeItem(ADMIN_SESSION_KEY); } catch (_) {}
+                const sess = loadAuthSession();
+                clearAuthSession();
+                if (sess) {
+                    const baseUrl = (state.cloudCfg.url || '').trim().replace(/\/+$/, '');
+                    fetch(`${baseUrl}/auth/v1/logout`, { method: 'POST', headers: { 'apikey': (state.cloudCfg.key || '').trim(), 'Authorization': `Bearer ${sess.access_token}` } }).catch(() => {});
+                }
                 state.menuOpen = false;
                 showToast('Modalità Admin disattivata.', 'info');
             } else if (action === 'toggle-season-status') {
@@ -4398,15 +4468,22 @@
 
             if (id === 'modal-pin-form') {
                 if (IS_PUBLIC_VIEW) return;
-                const val = (document.getElementById('pin-input-field')?.value || '').trim();
-                const validHash = state.cloudCfg.pinHash || hashPin(DEFAULT_ADMIN_PIN);
-                if (val && hashPin(val) === validHash) {
+                const email = (document.getElementById('login-email-field')?.value || '').trim();
+                const password = document.getElementById('login-password-field')?.value || '';
+                if (!email || !password) { showToast('Inserisci email e password.', 'error'); return; }
+                try { localStorage.setItem(AUTH_EMAIL_KEY, email); } catch (_) {}
+                const baseUrl = (state.cloudCfg.url || '').trim().replace(/\/+$/, '');
+                const apiKey = (state.cloudCfg.key || '').trim();
+                try {
+                    const data = await authRequest(baseUrl, apiKey, 'password', { email, password });
+                    saveAuthSession(data);
+                    try { localStorage.setItem(AUTH_EMAIL_KEY, email); } catch (_) {}
                     state.isAdmin = true;
-                    try { sessionStorage.setItem(ADMIN_SESSION_KEY, '1'); } catch (_) {}
                     state.activeModal = null;
-                    showToast('Modalità Admin sbloccata!', 'success');
-                } else {
-                    showToast('PIN errato. Riprova.', 'error');
+                    showToast('Accesso admin effettuato!', 'success');
+                } catch (err) {
+                    showToast(err.status === 400 ? 'Email o password errate.' : 'Accesso non riuscito: controlla la connessione.', 'error');
+                    return;
                 }
             } else if (id === 'inline-add-episode-form') {
                 const yr = e.target.getAttribute('data-year');
@@ -4674,29 +4751,20 @@
             } else if (id === 'modal-cloud-form') {
                 const url = (document.getElementById('cloud-url-input')?.value || '').trim().replace(/\/+$/, '');
                 const key = (document.getElementById('cloud-key-input')?.value || '').trim();
-                const newPin = (document.getElementById('cloud-pin-input')?.value || '').trim();
-                const pinChanged = !!newPin;
-
-                state.cloudCfg = { url, key, pinHash: pinChanged ? hashPin(newPin) : state.cloudCfg.pinHash };
+                state.cloudCfg = { url, key, pinHash: state.cloudCfg.pinHash };
                 try { localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify(state.cloudCfg)); } catch (_) {}
                 state.activeModal = null;
-                if (pinChanged) {
-                    // Salva subito il nuovo PIN (solo hash) nel cloud, poi riallinea i dati
-                    const newHash = state.cloudCfg.pinHash;
-                    await pullFromCloud(false);
-                    state.cloudCfg.pinHash = newHash;
-                    try { localStorage.setItem(CLOUD_CFG_KEY, JSON.stringify(state.cloudCfg)); } catch (_) {}
-                    const ok = await pushToCloud(state.seasons);
-                    showToast(ok ? 'PIN aggiornato e salvato nel cloud.' : 'PIN salvato solo su questo dispositivo.', ok ? 'success' : 'error');
-                } else {
-                    await pullFromCloud(true);
-                }
+                await pullFromCloud(true);
             }
         });
 
         // Avvio immediato e sincronizzazione Cloud
         render();
         pullFromCloud(false);
+        if (state.isAdmin && !IS_PUBLIC_VIEW) {
+            getAccessToken((state.cloudCfg.url || '').trim().replace(/\/+$/, ''), (state.cloudCfg.key || '').trim())
+                .then(tok => { if (!tok) { state.isAdmin = false; render(); showToast('Sessione admin scaduta: accedi di nuovo.', 'info'); } });
+        }
     })();
     </script>
 </body>
