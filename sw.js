@@ -2,7 +2,7 @@
 // Pagina: prima la rete (così gli aggiornamenti arrivano subito), copia in cache se offline.
 // Icone, font e librerie esterne: prima la cache.
 // I dati del cloud (Supabase) non passano mai dalla cache: offline l'app usa l'ultima copia salvata sul dispositivo.
-const CACHE = 'murodasolo-v2';
+const CACHE = 'murodasolo-v3';
 const CORE = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 const STATIC_HOSTS = ['cdnjs.cloudflare.com', 'fonts.googleapis.com', 'fonts.gstatic.com', 'cdn.sheetjs.com'];
 
@@ -50,4 +50,29 @@ self.addEventListener('fetch', event => {
       }))
     );
   }
+});
+
+// Notifiche push: nuovo muro registrato
+self.addEventListener('push', event => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (_) { data = { title: 'Murodasolo F1', body: event.data ? event.data.text() : '' }; }
+  event.waitUntil(self.registration.showNotification(data.title || 'Murodasolo F1', {
+    body: data.body || '',
+    icon: 'icon-192.png',
+    badge: 'icon-192.png',
+    tag: data.tag || undefined,
+    data: { url: data.url || '/' }
+  }));
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const target = new URL((event.notification.data && event.notification.data.url) || '/', self.location.origin).href;
+  event.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const c of all) {
+      if (c.url.startsWith(self.location.origin)) { await c.focus(); return; }
+    }
+    await self.clients.openWindow(target);
+  })());
 });

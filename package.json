@@ -1,0 +1,8 @@
+{
+  "name": "murodasolo-f1",
+  "private": true,
+  "description": "Murodasolo F1 - funzioni Netlify (notifiche push, archivio risultati)",
+  "dependencies": {
+    "web-push": "^3.6.7"
+  }
+}
