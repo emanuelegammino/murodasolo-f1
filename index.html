@@ -1742,6 +1742,30 @@
                         </div>
                     </div>
 
+                    ${(() => {
+                        const yr = state.activeView;
+                        if (!state.seasons[yr]) return '';
+                        const eps = (state.seasons[yr].logs || [])
+                            .filter(lg => lg.driverName === A.name)
+                            .sort((a, b) => (Number(a.round) - Number(b.round)) || (SESSIONS_LIST.indexOf(a.session) - SESSIONS_LIST.indexOf(b.session)));
+                        return `
+                            <div>
+                                <h4 class="text-[11px] font-mono font-bold uppercase tracking-wider text-gray-400 mb-2">Episodi ${escapeHtml(yr)} · ${escapeHtml(A.name)}</h4>
+                                <div class="flex flex-col gap-1.5">
+                                    ${eps.length ? eps.map(ep => `
+                                        <div class="w-full px-3.5 py-2 rounded-xl bg-[#0B0E14] border border-[#232B42] flex items-start justify-between gap-2 text-xs ${countsInStandings(ep) ? '' : 'opacity-60'}">
+                                            <span class="text-gray-200 font-semibold leading-snug">${formatEpisodeLocation(ep)}${ep.trackCondition === 'wet' ? ' 🌧️' : ''}${countsInStandings(ep) ? '' : ' <span class="text-gray-400 font-normal">(senza danni)</span>'}</span>
+                                            <span class="flex items-center gap-1.5 shrink-0">
+                                                ${renderVideoButton(ep.url, true)}
+                                                <span class="px-2 py-0.5 rounded bg-[#131823] border border-[#232B42] font-mono text-[11px] font-bold text-amber-300">${escapeHtml(sessionLabel(ep.session))}</span>
+                                            </span>
+                                        </div>
+                                    `).join('') : '<div class="text-xs text-gray-400">Nessun episodio in questa stagione.</div>'}
+                                </div>
+                            </div>
+                        `;
+                    })()}
+
                     <div class="grid grid-cols-1 ${B ? 'sm:grid-cols-2' : ''} gap-3">
                         ${[A, B].filter(Boolean).map((P, i) => `
                             <div class="rounded-2xl bg-[#0B0E14] border border-[#232B42] p-3.5 space-y-2">
@@ -3642,7 +3666,7 @@
 
                                 return `
                                     <div>
-                                        <button type="button" data-action="toggle-driver" data-name="${escapeHtml(d.name)}"
+                                        <button type="button" data-action="open-driver-card" data-name="${escapeHtml(d.name)}"
                                             class="w-full px-4 py-3.5 hover:bg-[#192033] text-left transition cursor-pointer">
                                             <div class="flex items-center justify-between gap-3">
                                                 <div class="flex items-center gap-3 min-w-0">
@@ -3652,7 +3676,7 @@
                                                     ${state.activeView !== 'ALL_TIME' ? `
                                                         <span class="px-1.5 py-0.5 rounded bg-[#0B0E14] border border-[#232B42] font-mono text-[10px] text-gray-400 shrink-0">${escapeHtml(d.latestTeamCode)}</span>
                                                     ` : ''}
-                                                    <i class="fa-solid fa-chevron-down text-xs text-gray-400 transition-transform shrink-0 ${isExpanded ? 'rotate-180' : ''}"></i>
+                                                    <i class="fa-solid fa-chevron-right text-[10px] text-gray-500 shrink-0"></i>
                                                 </div>
                                                 <span class="font-mono text-base font-black text-white shrink-0">${metric}</span>
                                             </div>
