@@ -1659,11 +1659,10 @@
             return any ? tot : null;
         }
 
+        // Incidenza = muri ogni 100 GP disputati, in percentuale (es. 27,8%)
         function formatIncidence(muri, gp) {
             if (!gp) return '—';
-            if (!muri) return `0 muri in ${gp} GP`;
-            const every = gp / muri;
-            return `1 ogni ${every.toFixed(every < 10 ? 1 : 0).replace('.', ',')} GP`;
+            return `${(muri / gp * 100).toFixed(1).replace('.', ',')}%`;
         }
 
         // ==========================================
@@ -3352,13 +3351,12 @@
 
                         ${state.statsTab === 'drivers' ? (() => {
                             const yrs = state.statsPeriod === 'ALL_TIME' ? sortedKeys : [state.statsPeriod];
-                            const minGp = state.statsPeriod === 'ALL_TIME' ? 10 : 5;
                             const muriBy = {};
                             yrs.forEach(y => (state.seasons[y]?.logs || []).forEach(lg => { if (countsInStandings(lg) && lg.driverName) muriBy[lg.driverName] = (muriBy[lg.driverName] || 0) + 1; }));
                             const ready = yrs.every(y => gpStartsCache[y]);
                             const rows = ready ? Object.entries(muriBy)
                                 .map(([name, muri]) => ({ name, muri, gp: getGpStarts(name, yrs) || 0 }))
-                                .filter(r => r.gp >= minGp)
+                                .filter(r => r.gp > 0)
                                 .map(r => ({ ...r, rate: r.muri / r.gp }))
                                 .sort((a, b) => (b.rate - a.rate) || (b.muri - a.muri) || a.name.localeCompare(b.name)) : [];
                             const isOpen = state.expandedSessionKey === 'incidence';
@@ -3367,14 +3365,14 @@
                                 <div class="bg-[#131823] border border-[#232B42] rounded-3xl overflow-hidden">
                                     <div class="px-4 py-4 border-b border-[#232B42]">
                                         <h3 class="text-sm sm:text-base font-black uppercase tracking-wide text-white">Incidenza Muri per GP</h3>
-                                        <p class="text-[11px] font-mono text-gray-400 mt-0.5">Muri in rapporto ai GP disputati · minimo ${minGp} GP</p>
+                                        <p class="text-[11px] font-mono text-gray-400 mt-0.5">Muri in rapporto ai GP disputati</p>
                                     </div>
                                     ${!ready ? `
                                         <div class="px-4 py-4 text-xs text-gray-400">${gpStartsError
                                             ? 'Archivio dei risultati non raggiungibile in questo momento: riprova più tardi.'
                                             : 'Caricamento dei GP disputati dall\'archivio risultati… (serve la connessione)'}</div>
                                     ` : !leader ? `
-                                        <div class="px-4 py-4 text-xs text-gray-400">Nessun pilota con almeno ${minGp} GP in questo periodo.</div>
+                                        <div class="px-4 py-4 text-xs text-gray-400">Nessun pilota con GP disputati in questo periodo.</div>
                                     ` : `
                                         <button type="button" data-action="toggle-session" data-key="incidence"
                                             class="w-full px-4 py-3.5 hover:bg-[#192033] flex items-center justify-between gap-3 text-left cursor-pointer">
@@ -3384,9 +3382,9 @@
                                                     <span class="text-sm font-extrabold text-white truncate">${escapeHtml(leader.name)}</span>
                                                     <i class="fa-solid fa-chevron-down text-xs text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}"></i>
                                                 </div>
-                                                <div class="text-[11px] font-mono text-gray-400 mt-0.5">${leader.muri} muri in ${leader.gp} GP · ${escapeHtml(formatIncidence(leader.muri, leader.gp))}</div>
+                                                <div class="text-[11px] font-mono text-gray-400 mt-0.5">${leader.muri} muri in ${leader.gp} GP</div>
                                             </div>
-                                            <span class="px-2.5 h-10 rounded-2xl bg-[#0B0E14] border border-[#232B42] flex items-center justify-center font-mono text-sm font-black text-white shrink-0">${(leader.rate * 100).toFixed(0)}%</span>
+                                            <span class="px-2.5 h-10 rounded-2xl bg-[#0B0E14] border border-[#232B42] flex items-center justify-center font-mono text-sm font-black text-white shrink-0">${escapeHtml(formatIncidence(leader.muri, leader.gp))}</span>
                                         </button>
                                         ${isOpen ? `
                                             <div class="px-4 pb-4 pt-2 bg-[#0B0E14]/70 border-t border-[#232B42]/50 fade-in">
@@ -3404,7 +3402,7 @@
                                                         </div>
                                                     `).join('')}
                                                 </div>
-                                                <p class="text-[10px] text-gray-500 mt-2">La percentuale indica i muri ogni 100 GP disputati. GP disputati: archivio pubblico dei risultati (Jolpica/Ergast).</p>
+                                                <p class="text-[10px] text-gray-500 mt-2">Percentuale = muri ogni 100 GP disputati. GP disputati: archivio pubblico dei risultati (Jolpica/Ergast); conta anche il GP con muro nel giro di formazione.</p>
                                             </div>
                                         ` : ''}
                                     `}
